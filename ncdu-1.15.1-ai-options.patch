@@ -1,0 +1,112 @@
+diff -Nru ncdu-1.15.1/src/dir_common.c ncdu-1.15.1-patch/src/dir_common.c
+--- ncdu-1.15.1/src/dir_common.c	2020-05-30 19:46:37.000000000 +0300
++++ ncdu-1.15.1-patch/src/dir_common.c	2021-05-22 08:22:38.672540659 +0300
+@@ -29,8 +29,8 @@
+ #include <stdlib.h>
+ #include <stdio.h>
+ #include <stdarg.h>
+-
+-
++extern int hide_current_item;
++extern int animation_on;
+ int (*dir_process)(void);
+ char *dir_curpath;   /* Full path of the last seen item. */
+ struct dir_output dir_output;
+@@ -128,7 +128,7 @@
+   }
+ 
+   uic_set(UIC_DEFAULT);
+-  ncprint(3, 2, "Current item: %s", cropstr(dir_curpath, width-18));
++  if (!hide_current_item) ncprint(3, 2, "Current item: %s", cropstr(dir_curpath, width-18));
+   if(confirm_quit_while_scanning_stage_1_passed) {
+     ncaddstr(8, width-26, "Press ");
+     addchc(UIC_KEY, 'y');
+@@ -148,8 +148,10 @@
+      ncaddstr(6, 3, "some directory sizes may not be correct");
+   }
+ 
++  /* animation - but only key --hide-current-item isn`t present */
++  if (animation_on) {
+   /* animation - but only if the screen refreshes more than or once every second */
+-  if(update_delay <= 1000) {
++    if(update_delay <= 1000) {
+     if(++anpos == strlen(antext)*2)
+        anpos = 0;
+     memset(ani, ' ', strlen(antext));
+@@ -163,6 +165,7 @@
+     strcpy(ani, antext);
+   ncaddstr(8, 3, ani);
+ }
++}
+ 
+ 
+ static void draw_error(char *cur, char *msg) {
+diff -Nru ncdu-1.15.1/src/main.c ncdu-1.15.1-patch/src/main.c
+--- ncdu-1.15.1/src/main.c	2020-06-07 11:02:11.000000000 +0300
++++ ncdu-1.15.1-patch/src/main.c	2021-05-24 12:52:15.374387526 +0300
+@@ -34,8 +34,8 @@
+ #include <sys/time.h>
+ 
+ #include <yopt.h>
+-
+-
++int animation_on = 1; /* Default is on as in original */
++int hide_current_item = 0; /* Hide current item when scan directory */
+ int pstate;
+ int read_only = 0;
+ long update_delay = 100;
+@@ -144,6 +144,8 @@
+     { 's', 0, "--si" },
+     { 'Q', 0, "--confirm-quit" },
+     { 'c', 1, "--color" },
++    { 'a', 0, "-a, --animation-off" },
++    { 'i', 0, "-i,--hide-current-item" },
+     {0,0,NULL}
+   };
+ 
+@@ -164,6 +166,8 @@
+       printf("  -r                         Read only\n");
+       printf("  -o FILE                    Export scanned directory to FILE\n");
+       printf("  -f FILE                    Import scanned directory from FILE\n");
++      printf("  -a,  --animatio-off        Disable animation when scan directory\n"); 
++      printf("  -i,  --hide-current-item   Hide name current item when scan directory\n");
+       printf("  -0,-1,-2                   UI to use when scanning (0=none,2=full ncurses)\n");
+       printf("  --si                       Use base 10 (SI) prefixes instead of base 2\n");
+       printf("  --exclude PATTERN          Exclude files that match PATTERN\n");
+@@ -234,6 +238,10 @@
+         exit(1);
+       }
+       break;
++    case 'i':
++      hide_current_item = 1; break;
++    case 'a':
++      animation_on = 0; break;
+     case -2:
+       fprintf(stderr, "ncdu: %s.\n", val);
+       exit(1);
+diff -Nru ncdu-1.15.1/src/util.c ncdu-1.15.1-patch/src/util.c
+--- ncdu-1.15.1/src/util.c	2020-05-30 20:30:39.000000000 +0300
++++ ncdu-1.15.1-patch/src/util.c	2021-05-07 10:53:16.075361622 +0300
+@@ -103,21 +103,7 @@
+   int i, j;
+ 
+   /* the K&R method - more portable than sprintf with %lld */
+-  i = 0;
+-  do {
+-    tmp[i++] = n % 10 + '0';
+-  } while((n /= 10) > 0);
+-  tmp[i] = '\0';
+-
+-  /* reverse and add thousand separators */
+-  j = 0;
+-  while(i--) {
+-    dat[j++] = tmp[i];
+-    if(i != 0 && i%3 == 0)
+-      dat[j++] = thou_sep;
+-  }
+-  dat[j] = '\0';
+-
++  sprintf(dat, "%lld", from);
+   return dat;
+ }
+ 
